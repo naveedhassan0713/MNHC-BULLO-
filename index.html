@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNHC BULLO</title>
+<style>
+:root{--g:#0f766e;--bg:#f4f6f6;--c:#fff;--t:#1b2a2a;--m:#667;--r:#b91c1c;--o:#b45309;--b:#dde3e3}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--t);padding-bottom:70px}
+header{background:var(--g);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:18px}
+header small{opacity:.85}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid var(--b);z-index:5}
+nav button{flex:1;padding:12px 2px;border:0;background:none;font-size:12px;color:var(--m)}
+nav button.on{color:var(--g);font-weight:700;border-top:3px solid var(--g)}
+main{padding:12px;max-width:640px;margin:auto}
+.card{background:var(--c);border:1px solid var(--b);border-radius:10px;padding:12px;margin-bottom:10px}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.tag{font-size:12px;padding:2px 8px;border-radius:99px;background:#e6f2f1;color:var(--g)}
+.tag.red{background:#fde8e8;color:var(--r)}.tag.or{background:#fef3e2;color:var(--o)}
+label{display:block;font-size:13px;color:var(--m);margin:8px 0 3px}
+input,select{width:100%;padding:10px;border:1px solid var(--b);border-radius:8px;font-size:15px;background:#fff}
+textarea{width:100%;padding:10px;border:1px solid var(--b);border-radius:8px;font-size:14px}
+button.p{background:var(--g);color:#fff;border:0;border-radius:8px;padding:10px 14px;font-size:15px}
+button.s,a.s{background:#fff;color:var(--g);border:1px solid var(--g);border-radius:8px;padding:8px 12px;font-size:14px;text-decoration:none}
+button.d{background:#fff;color:var(--r);border:1px solid var(--r);border-radius:8px;padding:8px 12px;font-size:14px}
+.m{color:var(--m);font-size:13px}
+h2{font-size:16px;margin:14px 0 8px}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.g5>div{text-align:center}
+.g5 span{display:block;font-size:12px;color:var(--m);margin-bottom:2px}
+.g5 input{padding:8px 2px;text-align:center}
+.big{font-size:22px;font-weight:700;color:var(--g)}
+.hide{display:none}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10;display:flex;align-items:flex-end}
+.modal>div{background:#fff;width:100%;max-height:92vh;overflow:auto;padding:16px;border-radius:16px 16px 0 0;max-width:640px;margin:auto}
+.seg{display:flex;gap:6px;margin-bottom:8px}
+.seg button{flex:1;padding:8px;border:1px solid var(--g);background:#fff;color:var(--g);border-radius:8px;font-size:14px}
+.seg button.on{background:var(--g);color:#fff}
+.att button{flex:1;padding:9px 4px;border:1px solid var(--b);background:#fff;border-radius:8px;font-size:14px}
+.att button.P.on{background:#d1fae5;border-color:#059669;color:#065f46;font-weight:700}
+.att button.A.on{background:#fde8e8;border-color:var(--r);color:var(--r);font-weight:700}
+.att button.L.on{background:#fef3e2;border-color:var(--o);color:var(--o);font-weight:700}
+.bar{height:6px;background:#e5eaea;border-radius:4px;overflow:hidden;margin:2px 0 4px}
+.bar i{display:block;height:100%;background:var(--g)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wrap{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.lnk{color:var(--r);font-size:13px}
+</style>
+</head>
+<body>
+<header><h1>MNHC BULLO</h1><small>Field staff records &amp; performance · works offline</small></header>
+<main id="app"></main>
+<nav>
+ <button data-t="daily" class="on">Daily</button>
+ <button data-t="women">Women</button>
+ <button data-t="staff">Staff</button>
+ <button data-t="rep">Reports</button>
+ <button data-t="data">Backup</button>
+</nav>
+<div id="modal" class="modal hide"><div id="mbody"></div></div>
+
+<script>
+const KEY='mnhc_bullo_v3';
+const IND=[['anc','ANC'],['edd','EDD'],['nvd','NVD'],['pnc','PNC'],['fp','FP']];
+let db={staff:[],women:[],visits:[],services:[],entries:[],attend:[],targets:{}};
+function norm(d){return{staff:d.staff||[],women:d.women||[],visits:d.visits||[],services:d.services||[],entries:d.entries||[],attend:d.attend||[],targets:d.targets||{}}}
+function load(){try{const s=localStorage.getItem(KEY);if(s)db=norm(JSON.parse(s))}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){alert('Could not save: storage full or blocked')}}
+load();
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const iso=d=>{const x=new Date(d);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')};
+const today=()=>iso(new Date());
+const addDays=(s,n)=>{const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);return iso(d)};
+const diff=(a,b)=>Math.round((new Date(a+'T00:00:00')-new Date(b+'T00:00:00'))/864e5);
+const fmt=s=>s?new Date(s+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'-';
+const eddFromLMP=l=>addDays(l,280);
+const inR=(d,f,t)=>d>=f&&d<=t;
+const sName=id=>(db.staff.find(l=>l.id===id)||{}).name||'?';
+const wk=w=>Math.max(0,Math.floor(diff(today(),addDays(w.edd,-280))/7));
+const wOf=v=>db.women.find(x=>x.id===v.wid);
+const getE=(sid,d)=>db.entries.find(e=>e.sid===sid&&e.date===d);
+const getAtt=(sid,d)=>(db.attend.find(a=>a.sid===sid&&a.date===d)||{}).status||'';
+let tab='daily',dDate=today(),sel='',repMode='month',repDate=today(),repRole='',rSid='',rMon=today().slice(0,7);
+
+function render(){
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===(tab==='rec'?'staff':tab)));
+ $('#app').innerHTML=({daily:vDaily,women:vWomen,staff:vStaff,rep:vRep,data:vData,rec:vRec}[tab])();
+ window.scrollTo(0,0);
+}
+function modal(h){$('#mbody').innerHTML=h;$('#modal').classList.remove('hide')}
+function closeM(){$('#modal').classList.add('hide')}
+function staffFilter(){return `<select onchange="sel=this.value;render()"><option value="">All staff</option>${db.staff.map(l=>`<option value="${l.id}" ${sel===l.id?'selected':''}>${esc(l.name)} (${l.role})</option>`).join('')}</select>`}
+const tel=p=>p?`<a class="s" href="tel:${esc(p)}">Call</a>`:'';
+
+// ---------- counts ----------
+function dayC(sid,d){
+ const e=getE(sid,d)||{};
+ const o={anc:e.anc||0,edd:e.edd||0,nvd:e.nvd||0,pnc:e.pnc||0,fp:e.fp||0};
+ o.anc+=db.visits.filter(v=>v.date===d&&(wOf(v)||{}).lhw===sid).length;
+ db.services.filter(x=>x.sid===sid&&x.date===d).forEach(x=>o[x.type.toLowerCase()]++);
+ return o;
+}
+function stats(s,f,t){
+ const o={anc:0,edd:0,nvd:0,pnc:0,fp:0};
+ db.entries.filter(e=>e.sid===s.id&&inR(e.date,f,t)).forEach(e=>IND.forEach(([k])=>o[k]+=e[k]||0));
+ o.anc+=db.visits.filter(v=>inR(v.date,f,t)&&(wOf(v)||{}).lhw===s.id).length;
+ db.services.filter(x=>x.sid===s.id&&inR(x.date,f,t)).forEach(x=>o[x.type.toLowerCase()]++);
+ o.edd+=db.women.filter(w=>w.lhw===s.id&&inR(w.edd,f,t)).length;
+ const at=st=>db.attend.filter(a=>a.sid===s.id&&a.status===st&&inR(a.date,f,t)).length;
+ o.P=at('P');o.A=at('A');o.L=at('L');
+ o.total=o.anc+o.edd+o.nvd+o.pnc+o.fp;return o;
+}
+
+// ---------- Daily ----------
+function setNum(sid,k,v){
+ let e=getE(sid,dDate);
+ if(!e){e={id:uid(),sid,date:dDate,anc:0,edd:0,nvd:0,pnc:0,fp:0};db.entries.push(e)}
+ e[k]=Math.max(0,parseInt(v)||0);save();
+}
+function setAtt(sid,st){
+ const a=db.attend.find(x=>x.sid===sid&&x.date===dDate);
+ if(a){if(a.status===st)db.attend=db.attend.filter(x=>x!==a);else a.status=st}else db.attend.push({sid,date:dDate,status:st});
+ save();render();
+}
+function allPresent(){db.staff.forEach(s=>{if(!getAtt(s.id,dDate))db.attend.push({sid:s.id,date:dDate,status:'P'})});save();render()}
+function vDaily(){
+ if(!db.staff.length)return `<div class="card"><p>Add your LHWs and CHIs first.</p><button class="p" onclick="tab='staff';render()">Go to Staff</button></div>`;
+ const card=s=>{const e=getE(s.id,dDate)||{};const st=getAtt(s.id,dDate);
+  const rc=dayC(s.id,dDate),qc=e;
+  const recd=[['ANC',rc.anc-(qc.anc||0)],['PNC',rc.pnc-(qc.pnc||0)],['FP',rc.fp-(qc.fp||0)],['NVD',rc.nvd-(qc.nvd||0)]].filter(x=>x[1]>0).map(x=>x.join(' ')+'').join(' · ');
+  return `<div class="card"><div class="row"><b>${esc(s.name)}</b><span class="tag">${s.role}</span></div>
+  <div class="row att" style="margin-top:8px">
+  <button class="P ${st==='P'?'on':''}" onclick="setAtt('${s.id}','P')">Present</button>
+  <button class="A ${st==='A'?'on':''}" onclick="setAtt('${s.id}','A')">Absent</button>
+  <button class="L ${st==='L'?'on':''}" onclick="setAtt('${s.id}','L')">Leave</button></div>
+  <div class="m" style="margin-top:8px">Quick counts (extra, not already entered as individual records):</div>
+  <div class="g5" style="margin-top:4px">${IND.map(([k,n])=>`<div><span>${n}</span><input type="number" inputmode="numeric" min="0" value="${e[k]||''}" placeholder="0" onchange="setNum('${s.id}','${k}',this.value)"></div>`).join('')}</div>
+  ${recd?`<div class="m" style="margin-top:6px">From individual records today: ${recd}</div>`:''}</div>`};
+ return `<div class="card"><label style="margin-top:0">Date</label>
+ <div class="row"><input type="date" value="${dDate}" onchange="dDate=this.value||today();render()">
+ <button class="s" style="white-space:nowrap" onclick="allPresent()">All present</button></div>
+ <p class="m" style="margin:8px 0 0">Mark attendance here. Visits entered under Women are counted automatically; use quick counts only for work you are not recording individually.</p></div>
+ ${['LHW','CHI'].map(r=>{const l=db.staff.filter(s=>s.role===r);return l.length?`<h2>${r}s</h2>`+l.map(card).join(''):''}).join('')}`;
+}
+
+// ---------- Women ----------
+function nextDue(w){
+ const vs=db.visits.filter(v=>v.wid===w.id).map(v=>v.date).sort();
+ if(!vs.length)return today();
+ const k=wk(w);return addDays(vs[vs.length-1],k>=36?7:k>=28?14:28);
+}
+function wCard(w){
+ const d=diff(w.edd,today());const cnt=db.visits.filter(v=>v.wid===w.id).length;
+ return `<div class="card"><div class="row"><b>${esc(w.name)}</b><span class="tag">${esc(sName(w.lhw))}</span></div>
+ <div class="m">${w.age?esc(w.age)+' yrs · ':''}${w.phone?esc(w.phone)+' · ':''}${esc(w.village||'')}${w.gp?' · '+esc(w.gp):''}</div>
+ <div class="m">${w.risk?'<span class="tag red">High risk</span> ':''}EDD <b>${fmt(w.edd)}</b> (${d>=0?d+' days left':Math.abs(d)+' days past'}) · ~${wk(w)} wks · ${cnt} ANC visits</div>
+ <div class="wrap"><button class="p" onclick="visitForm('${w.id}')">+ ANC visit</button>
+ <button class="s" onclick="womanForm('${w.id}')">Edit / EDD</button>
+ <button class="s" onclick="deliver('${w.id}')">Delivered</button>${tel(w.phone)}</div></div>`;
+}
+function deliver(id){const w=db.women.find(x=>x.id===id);const d=prompt('Delivery date (YYYY-MM-DD)',today());if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d)){w.delivered=d;save();render()}}
+function vWomen(){
+ const act=db.women.filter(w=>!w.delivered&&(!sel||w.lhw===sel)).sort((a,b)=>a.edd.localeCompare(b.edd));
+ const due=act.filter(w=>nextDue(w)<=today());
+ const dl=db.women.filter(w=>w.delivered&&(!sel||w.lhw===sel));
+ const ts=db.services.filter(v=>v.date===today()&&(!sel||v.sid===sel));
+ return `<div class="card">${staffFilter()}<div class="grid" style="margin-top:8px"><button class="p" onclick="womanForm(null,'${sel}')">+ Pregnant woman</button><button class="p" onclick="svcForm()">+ PNC / FP / NVD</button></div>
+ <div class="m" style="margin-top:8px">${act.length} active pregnancies · ${due.length} ANC due or overdue</div></div>
+ ${due.length?`<h2>ANC due / overdue</h2>`+due.map(wCard).join(''):''}
+ <h2>All EDDs (nearest first)</h2>
+ ${act.length?act.filter(w=>!due.includes(w)).map(wCard).join('')||'<p class="m">All shown above.</p>':'<p class="m">No active pregnancies.</p>'}
+ ${ts.length?`<h2>PNC / FP / NVD today</h2>`+ts.map(v=>`<div class="card"><b>${v.type} · ${esc(v.name||'-')}</b> <span class="tag">${esc(sName(v.sid))}</span>${v.method?`<div class="m">Method: ${esc(v.method)}</div>`:''}${v.note?`<div class="m">${esc(v.note)}</div>`:''}<a href="#" class="lnk" onclick="delSvc('${v.id}');return false">remove</a></div>`).join(''):''}
+ ${dl.length?`<h2>Delivered</h2>`+dl.map(w=>`<div class="card"><b>${esc(w.name)}</b> <span class="tag">${esc(sName(w.lhw))}</span><div class="m">EDD was ${fmt(w.edd)} · delivered ${fmt(w.delivered)}</div><button class="s" onclick="womanForm('${w.id}')">Edit</button></div>`).join(''):''}`;
+}
+function womanForm(id,pre){
+ if(!db.staff.length){alert('Add an LHW or CHI first');tab='staff';return render()}
+ const w=db.women.find(x=>x.id===id)||{};const cur=w.lhw||pre||sel||'';
+ modal(`<h2>${id?'Edit':'Add'} pregnant woman</h2>
+ <label>Under LHW / CHI</label><select id="f0">${db.staff.map(l=>`<option value="${l.id}" ${l.id===cur?'selected':''}>${esc(l.name)} (${l.role})</option>`).join('')}</select>
+ <label>Woman's name</label><input id="f1" value="${esc(w.name)}">
+ <div class="grid"><div><label>Age</label><input id="f2" type="number" value="${esc(w.age)}"></div>
+ <div><label>Phone</label><input id="f3" type="tel" value="${esc(w.phone)}"></div></div>
+ <label>Village / address</label><input id="f4" value="${esc(w.village)}">
+ <label>LMP (last menstrual period)</label><input id="f5" type="date" value="${esc(w.lmp)}" onchange="if(this.value)$('#f6').value=eddFromLMP(this.value)">
+ <label>EDD (auto from LMP; edit if ultrasound differs)</label><input id="f6" type="date" value="${esc(w.edd)}">
+ <label>Gravida / Para</label><input id="f7" value="${esc(w.gp)}" placeholder="e.g. G3P2">
+ <label><input type="checkbox" id="f8" style="width:auto" ${w.risk?'checked':''}> High risk</label>
+ <label>Delivery date (when delivered)</label><input id="f9" type="date" value="${esc(w.delivered)}">
+ <div class="row" style="margin-top:14px"><button class="s" onclick="closeM()">Cancel</button>
+ ${id?`<button class="d" onclick="delWoman('${id}')">Delete</button>`:''}
+ <button class="p" onclick="saveWoman('${id||''}')">Save</button></div>`);
+}
+function saveWoman(id){
+ const name=$('#f1').value.trim();let edd=$('#f6').value;const lmp=$('#f5').value;
+ if(!name)return alert('Name required');
+ if(!edd&&lmp)edd=eddFromLMP(lmp);
+ if(!edd)return alert('Enter LMP or EDD');
+ const o={lhw:$('#f0').value,name,age:$('#f2').value,phone:$('#f3').value.trim(),village:$('#f4').value.trim(),lmp,edd,gp:$('#f7').value.trim(),risk:$('#f8').checked,delivered:$('#f9').value,updated:today()};
+ if(id)Object.assign(db.women.find(x=>x.id===id),o);else db.women.push({id:uid(),created:today(),...o});
+ save();closeM();render();
+}
+function delWoman(id){if(confirm('Delete this woman and her ANC visits?')){db.women=db.women.filter(x=>x.id!==id);db.visits=db.visits.filter(v=>v.wid!==id);save();closeM();render()}}
+function visitForm(wid){
+ const w=db.women.find(x=>x.id===wid);
+ const past=db.visits.filter(v=>v.wid===wid).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+ modal(`<h2>ANC visit · ${esc(w.name)}</h2>
+ <label>Date</label><input id="v1" type="date" value="${today()}">
+ <div class="grid"><div><label>BP</label><input id="v2" placeholder="120/80"></div><div><label>Weight (kg)</label><input id="v3" type="number" step="0.1"></div>
+ <div><label>Hb (g/dL)</label><input id="v4" type="number" step="0.1"></div><div><label>Fundal ht (cm)</label><input id="v5" type="number"></div></div>
+ <label>Notes / referral</label><textarea id="v6" rows="2"></textarea>
+ <div class="row" style="margin-top:14px"><button class="s" onclick="closeM()">Cancel</button><button class="p" onclick="saveVisit('${wid}')">Save visit</button></div>
+ ${past.length?`<h2>Previous visits</h2>`+past.map(v=>`<div class="m">${fmt(v.date)} · BP ${esc(v.bp||'-')} · Wt ${esc(v.wt||'-')} · Hb ${esc(v.hb||'-')} <a href="#" class="lnk" onclick="delVisit('${v.id}','${wid}');return false">remove</a></div>`).join(''):''}`);
+}
+function saveVisit(wid){
+ const date=$('#v1').value;if(!date)return alert('Date required');
+ db.visits.push({id:uid(),wid,date,bp:$('#v2').value.trim(),wt:$('#v3').value,hb:$('#v4').value,fh:$('#v5').value,note:$('#v6').value.trim()});
+ save();closeM();render();
+}
+function delVisit(id,wid){if(confirm('Remove this visit?')){db.visits=db.visits.filter(v=>v.id!==id);save();visitForm(wid);render()}}
+function svcForm(){
+ if(!db.staff.length){alert('Add an LHW or CHI first');tab='staff';return render()}
+ modal(`<h2>Record service</h2>
+ <label>Type</label><select id="s0" onchange="$('#fpbox').classList.toggle('hide',this.value!=='FP')"><option>PNC</option><option>FP</option><option value="NVD">NVD (normal vaginal delivery)</option></select>
+ <label>LHW / CHI</label><select id="s1">${db.staff.map(l=>`<option value="${l.id}" ${l.id===sel?'selected':''}>${esc(l.name)} (${l.role})</option>`).join('')}</select>
+ <label>Date</label><input id="s2" type="date" value="${today()}">
+ <label>Woman / client name</label><input id="s3" list="wl"><datalist id="wl">${db.women.map(w=>`<option value="${esc(w.name)}">`).join('')}</datalist>
+ <div id="fpbox" class="hide"><label>FP method</label><select id="s4"><option>Counselling</option><option>Injection</option><option>Pills</option><option>Condoms</option><option>IUCD</option><option>Implant</option><option>Other</option></select></div>
+ <label>Notes</label><textarea id="s5" rows="2"></textarea>
+ <div class="row" style="margin-top:14px"><button class="s" onclick="closeM()">Cancel</button><button class="p" onclick="saveSvc()">Save</button></div>`);
+}
+function saveSvc(){
+ const type=$('#s0').value,date=$('#s2').value;if(!date)return alert('Date required');
+ db.services.push({id:uid(),type,sid:$('#s1').value,date,name:$('#s3').value.trim(),method:type==='FP'?$('#s4').value:'',note:$('#s5').value.trim()});
+ save();closeM();render();
+}
+function delSvc(id){if(confirm('Remove this record?')){db.services=db.services.filter(s=>s.id!==id);save();render()}}
+
+// ---------- Staff + individual record ----------
+function vStaff(){
+ return `<button class="p" style="width:100%;margin-bottom:10px" onclick="staffForm()">+ Add LHW / CHI</button>`+
+ (db.staff.length?db.staff.map(l=>{const n=db.women.filter(w=>w.lhw===l.id&&!w.delivered).length;
+ return `<div class="card"><div class="row"><b>${esc(l.name)} <span class="tag">${l.role}</span></b><span class="m">${esc(l.phone||'')}</span></div>
+ <div class="m">${esc(l.area||'')}${l.area?' · ':''}${n} active pregnancies</div>
+ <div class="wrap"><button class="p" onclick="openRec('${l.id}')">Record</button>${tel(l.phone)}<button class="s" onclick="staffForm('${l.id}')">Edit</button></div></div>`}).join(''):'<p class="m">No staff added yet.</p>');
+}
+function staffForm(id){
+ const l=db.staff.find(x=>x.id===id)||{role:'LHW'};
+ modal(`<h2>${id?'Edit':'Add'} staff</h2>
+ <label>Role</label><select id="g0"><option ${l.role==='LHW'?'selected':''}>LHW</option><option ${l.role==='CHI'?'selected':''}>CHI</option></select>
+ <label>Name</label><input id="g1" value="${esc(l.name)}">
+ <label>Phone</label><input id="g2" type="tel" value="${esc(l.phone)}">
+ <label>Area / catchment</label><input id="g3" value="${esc(l.area)}">
+ <div class="row" style="margin-top:14px"><button class="s" onclick="closeM()">Cancel</button>
+ ${id?`<button class="d" onclick="delStaff('${id}')">Delete</button>`:''}
+ <button class="p" onclick="saveStaff('${id||''}')">Save</button></div>`);
+}
+function saveStaff(id){
+ const name=$('#g1').value.trim();if(!name)return alert('Name required');
+ const o={role:$('#g0').value,name,phone:$('#g2').value.trim(),area:$('#g3').value.trim()};
+ if(id)Object.assign(db.staff.find(x=>x.id===id),o);else db.staff.push({id:uid(),...o});
+ save();closeM();render();
+}
+function delStaff(id){
+ if(db.women.some(w=>w.lhw===id))return alert('Delete or reassign this person\'s women first.');
+ if(confirm('Delete this person and their entries and attendance?')){
+  db.staff=db.staff.filter(x=>x.id!==id);db.entries=db.entries.filter(e=>e.sid!==id);db.attend=db.attend.filter(a=>a.sid!==id);db.services=db.services.filter(s=>s.sid!==id);
+  save();closeM();render()}
+}
+function openRec(id){rSid=id;rMon=today().slice(0,7);tab='rec';render()}
+function shiftRec(n){const d=new Date(rMon+'-01T00:00:00');d.setMonth(d.getMonth()+n);rMon=iso(d).slice(0,7);render()}
+function monthRange(m){const y=+m.slice(0,4),mo=+m.slice(5,7);return[iso(new Date(y,mo-1,1)),iso(new Date(y,mo,0))]}
+function vRec(){
+ const s=db.staff.find(x=>x.id===rSid);if(!s){tab='staff';return vStaff()}
+ const[f,t]=monthRange(rMon);const x=stats(s,f,t);
+ const label=new Date(f+'T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+ const stTag=st=>st==='P'?'<span class="tag">Present</span>':st==='A'?'<span class="tag red">Absent</span>':st==='L'?'<span class="tag or">Leave</span>':'';
+ const days=[];
+ for(let d=t;d>=f;d=addDays(d,-1)){const st=getAtt(s.id,d),c=dayC(s.id,d);if(st||IND.some(([k])=>c[k]))days.push({d,st,c})}
+ const hist=[];
+ for(let i=0;i<6;i++){const d=new Date(rMon+'-01T00:00:00');d.setMonth(d.getMonth()-i);const m=iso(d).slice(0,7);const[a,b]=monthRange(m);hist.push({m,x:stats(s,a,b)})}
+ const ws=db.women.filter(w=>w.lhw===s.id&&!w.delivered).sort((a,b)=>a.edd.localeCompare(b.edd));
+ return `<div class="card"><div class="row"><button class="s" onclick="tab='staff';render()">‹ Back</button><button class="s" onclick="repCSV('${s.id}')">Export CSV</button></div>
+ <h2 style="margin:10px 0 2px">${esc(s.name)} <span class="tag">${s.role}</span></h2>
+ <div class="m">${esc(s.phone||'')}${s.phone&&s.area?' · ':''}${esc(s.area||'')}</div></div>
+ <div class="card"><div class="row"><button class="s" onclick="shiftRec(-1)">‹</button><b>${label}</b><button class="s" onclick="shiftRec(1)">›</button></div>
+ <div class="g5">${IND.map(([k,n])=>`<div><span>${n}</span><div class="big">${x[k]}</div></div>`).join('')}</div>
+ <div class="m" style="margin-top:8px">Attendance: <span class="tag">${x.P} present</span> <span class="tag red">${x.A} absent</span> <span class="tag or">${x.L} leave</span></div></div>
+ <h2>Women under ${esc(s.name)} (${ws.length})</h2>
+ ${ws.length?ws.map(wCard).join(''):'<p class="m">No active pregnancies.</p>'}
+ <h2>Daily log</h2>
+ ${days.length?days.map(({d,st,c})=>`<div class="card"><div class="row"><b>${fmt(d)}</b>${stTag(st)}</div>
+ <div class="m">${IND.map(([k,n])=>`${n} ${c[k]}`).join(' · ')}</div>
+ <button class="s" style="margin-top:6px" onclick="dDate='${d}';tab='daily';render()">Edit this day</button></div>`).join(''):'<p class="m">No entries this month.</p>'}
+ <h2>Last 6 months</h2>
+ <div class="card">${hist.map(({m,x})=>`<div class="row" style="padding:4px 0;border-bottom:1px solid var(--b)"><b>${new Date(m+'-01T00:00:00').toLocaleDateString('en-GB',{month:'short',year:'2-digit'})}</b><span class="m">ANC ${x.anc} · EDD ${x.edd} · NVD ${x.nvd} · PNC ${x.pnc} · FP ${x.fp} · ${x.P}P/${x.A}A/${x.L}L</span></div>`).join('')}</div>`;
+}
+
+// ---------- Reports ----------
+function monday(s){const d=new Date(s+'T00:00:00');d.setDate(d.getDate()-(d.getDay()+6)%7);return iso(d)}
+function range(){if(repMode==='week'){const f=monday(repDate);return[f,addDays(f,6)]}return monthRange(repDate.slice(0,7))}
+function shiftP(n){
+ if(repMode==='week')repDate=addDays(repDate,7*n);
+ else{const d=new Date(repDate+'T00:00:00');d.setDate(1);d.setMonth(d.getMonth()+n);repDate=iso(d)}
+ render();
+}
+function vRep(){
+ const[f,t]=range();
+ const list=db.staff.filter(s=>!repRole||s.role===repRole).map(s=>({s,x:stats(s,f,t)})).sort((a,b)=>b.x.total-a.x.total);
+ const label=repMode==='week'?`${fmt(f)} – ${fmt(t)}`:new Date(f+'T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+ const T={anc:0,edd:0,nvd:0,pnc:0,fp:0,P:0,A:0,L:0};list.forEach(({x})=>{for(const k in T)T[k]+=x[k]});
+ const tg=db.targets;
+ return `<div class="seg"><button class="${repMode==='week'?'on':''}" onclick="repMode='week';render()">Weekly</button><button class="${repMode==='month'?'on':''}" onclick="repMode='month';render()">Monthly</button></div>
+ <div class="card"><div class="row"><button class="s" onclick="shiftP(-1)">‹</button><b>${label}</b><button class="s" onclick="shiftP(1)">›</button></div>
+ <div class="row" style="margin-top:8px"><select onchange="repRole=this.value;render()"><option value="">LHW + CHI</option><option ${repRole==='LHW'?'selected':''}>LHW</option><option ${repRole==='CHI'?'selected':''}>CHI</option></select>
+ <button class="s" style="white-space:nowrap" onclick="repCSV()">Export CSV</button></div>
+ <button class="s" style="margin-top:8px;width:100%" onclick="targetForm()">Set monthly targets</button></div>
+ <div class="card"><b>Total · ${list.length} staff</b><div class="g5">${IND.map(([k,n])=>`<div><span>${n}</span><div class="big">${T[k]}</div></div>`).join('')}</div>
+ <div class="m" style="margin-top:8px">Attendance: <span class="tag">${T.P} present</span> <span class="tag red">${T.A} absent</span> <span class="tag or">${T.L} leave</span></div></div>
+ ${list.length?list.map(({s,x},i)=>`<div class="card"><div class="row"><b>${i+1}. ${esc(s.name)} <span class="tag">${s.role}</span></b><span class="big">${x.total}</span></div>
+ <div class="g5">${IND.map(([k,n])=>{const g=tg[k]>0&&repMode==='month'?Math.round(x[k]/tg[k]*100):null;return `<div><span>${n}</span><b>${x[k]}</b>${g!==null?`<div class="bar"><i style="width:${Math.min(100,g)}%"></i></div><span>${g}%</span>`:''}</div>`}).join('')}</div>
+ <div class="m" style="margin-top:8px">Attendance: <span class="tag">${x.P} present</span> <span class="tag red">${x.A} absent</span> <span class="tag or">${x.L} leave</span></div>
+ <button class="s" style="margin-top:8px" onclick="openRec('${s.id}')">Individual record</button></div>`).join(''):'<p class="m">No staff yet.</p>'}
+ <p class="m">ANC/PNC/FP/NVD = individual records + quick counts. EDD = women with EDD in the period + quick counts. Ranked by total.</p>`;
+}
+function targetForm(){
+ modal(`<h2>Monthly target per person</h2><p class="m">Leave blank for no target. Monthly reports then show % achieved.</p>
+ ${IND.map(([k,n])=>`<label>${n}</label><input id="t_${k}" type="number" inputmode="numeric" value="${db.targets[k]||''}">`).join('')}
+ <div class="row" style="margin-top:14px"><button class="s" onclick="closeM()">Cancel</button><button class="p" onclick="saveTargets()">Save</button></div>`);
+}
+function saveTargets(){IND.forEach(([k])=>{db.targets[k]=parseInt($('#t_'+k).value)||0});save();closeM();render()}
+const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';
+function repCSV(sid){
+ if(sid){
+  const s=db.staff.find(x=>x.id===sid);
+  const dates=[...new Set([...db.entries.filter(e=>e.sid===sid).map(e=>e.date),...db.attend.filter(a=>a.sid===sid).map(a=>a.date),...db.services.filter(x=>x.sid===sid).map(x=>x.date),...db.visits.filter(v=>(wOf(v)||{}).lhw===sid).map(v=>v.date)])].sort();
+  const rows=[['Name','Role','Date','Attendance','ANC','EDD','NVD','PNC','FP']];
+  dates.forEach(d=>{const c=dayC(sid,d),st=getAtt(sid,d);rows.push([s.name,s.role,d,st==='P'?'Present':st==='A'?'Absent':st==='L'?'Leave':'',c.anc,c.edd,c.nvd,c.pnc,c.fp])});
+  return dl(`record-${s.name.replace(/\W+/g,'_')}.csv`,rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
+ }
+ const[f,t]=range();
+ const rows=[['Role','Name','From','To','ANC','EDD','NVD','PNC','FP','Total','Present','Absent','Leave']];
+ db.staff.filter(s=>!repRole||s.role===repRole).forEach(s=>{const x=stats(s,f,t);rows.push([s.role,s.name,f,t,x.anc,x.edd,x.nvd,x.pnc,x.fp,x.total,x.P,x.A,x.L])});
+ dl(`performance-${repMode}-${f}.csv`,rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
+}
+
+// ---------- Backup ----------
+function vData(){
+ return `<div class="card"><b>Backup</b><p class="m">Data is saved only on this phone. Back up regularly and keep a copy safe (WhatsApp it to yourself, or save to Drive).</p>
+ <button class="p" onclick="exportJSON()">Export backup file</button>
+ <button class="s" style="margin-top:8px" onclick="copyBackup()">Copy backup as text</button>
+ <button class="s" style="margin-top:8px" onclick="eddCSV()">Export women / EDD list (.csv)</button>
+ <label>Restore from backup file</label><input type="file" onchange="importFile(this)">
+ <label>Or paste backup text</label><textarea id="paste" rows="3"></textarea>
+ <button class="s" style="margin-top:8px" onclick="importText($('#paste').value)">Restore from text</button></div>
+ <div class="card"><b>Reset</b><p class="m">Deletes everything on this phone.</p><button class="d" onclick="if(confirm('Delete ALL data?')){db=norm({});save();render()}">Delete all data</button></div>`;
+}
+function dl(name,text,type){
+ try{const file=new File([text],name,{type});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],title:name}).catch(()=>{});return}}catch(e){}
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();
+}
+function exportJSON(){dl('mnhc-backup-'+today()+'.json',JSON.stringify(db),'application/json')}
+function copyBackup(){
+ const s=JSON.stringify(db);
+ if(navigator.clipboard)navigator.clipboard.writeText(s).then(()=>alert('Copied. Paste it into WhatsApp/Notes to keep it.'),()=>alert('Copy failed'));
+ else{const t=document.createElement('textarea');t.value=s;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();alert('Copied')}
+}
+function eddCSV(){
+ const rows=[['Staff','Role','Woman','Age','Phone','Village','LMP','EDD','Weeks','ANC visits','High risk','Delivered']];
+ db.women.slice().sort((a,b)=>sName(a.lhw).localeCompare(sName(b.lhw))||a.edd.localeCompare(b.edd)).forEach(w=>rows.push([sName(w.lhw),(db.staff.find(s=>s.id===w.lhw)||{}).role,w.name,w.age,w.phone,w.village,w.lmp,w.edd,wk(w),db.visits.filter(v=>v.wid===w.id).length,w.risk?'Y':'',w.delivered]));
+ dl('women-edd-'+today()+'.csv',rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
+}
+function importText(txt){try{const d=JSON.parse(txt);if(!d.staff)throw 0;if(confirm('Replace current data with this backup?')){db=norm(d);save();render();alert('Restored')}}catch(e){alert('Invalid backup')}}
+function importFile(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>importText(r.result);r.readAsText(f)}
+
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeM()});
+render();
+</script>
+</body>
+</html>
