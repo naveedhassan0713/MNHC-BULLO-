@@ -12,7 +12,7 @@ header{background:var(--g);color:#fff;padding:12px 16px;position:sticky;top:0;z-
 header h1{margin:0;font-size:18px}
 header small{opacity:.85}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid var(--b);z-index:5}
-nav button{flex:1;padding:12px 2px;border:0;background:none;font-size:12px;color:var(--m)}
+nav button{flex:1;padding:12px 1px;border:0;background:none;font-size:11.5px;color:var(--m)}
 nav button.on{color:var(--g);font-weight:700;border-top:3px solid var(--g)}
 main{padding:12px;max-width:640px;margin:auto}
 .card{background:var(--c);border:1px solid var(--b);border-radius:10px;padding:12px;margin-bottom:10px}
@@ -24,10 +24,11 @@ input,select{width:100%;padding:10px;border:1px solid var(--b);border-radius:8px
 textarea{width:100%;padding:10px;border:1px solid var(--b);border-radius:8px;font-size:14px}
 button.p{background:var(--g);color:#fff;border:0;border-radius:8px;padding:10px 14px;font-size:15px}
 button.s,a.s{background:#fff;color:var(--g);border:1px solid var(--g);border-radius:8px;padding:8px 12px;font-size:14px;text-decoration:none}
+button.w{background:#25d366;color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:14px}
 button.d{background:#fff;color:var(--r);border:1px solid var(--r);border-radius:8px;padding:8px 12px;font-size:14px}
 .m{color:var(--m);font-size:13px}
 h2{font-size:16px;margin:14px 0 8px}
-.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.g5{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:6px;margin-top:10px}
 .g5>div{text-align:center}
 .g5 span{display:block;font-size:12px;color:var(--m);margin-bottom:2px}
 .g5 input{padding:8px 2px;text-align:center}
@@ -47,27 +48,45 @@ h2{font-size:16px;margin:14px 0 8px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .wrap{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .lnk{color:var(--r);font-size:13px}
+.regw{overflow-x:auto;background:#fff;border:1px solid var(--b);border-radius:10px;margin-bottom:10px}
+.reg{border-collapse:collapse;font-size:12px}
+.reg th,.reg td{border:1px solid var(--b);padding:0}
+.reg th{background:#f0f4f4;font-weight:600;padding:3px 4px;text-align:center}
+.reg th.nm{position:sticky;left:0;text-align:left;min-width:92px;padding:4px 6px;z-index:1}
+.reg th.nm small{display:block;color:var(--m);font-weight:400}
+.reg th.sun{background:#e1e8e8}
+.rc{min-width:30px;height:36px;text-align:center;font-weight:700}
+.rc.P{background:#d1fae5;color:#065f46}.rc.A{background:#fde8e8;color:var(--r)}.rc.L{background:#fef3e2;color:var(--o)}
+.tot{padding:0 6px!important;white-space:nowrap}
 </style>
 </head>
 <body>
-<header><h1>MNHC BULLO</h1><small>Field staff records &amp; performance · works offline</small></header>
+<header><h1>MNHC BULLO</h1><small id="sub">Field staff records &amp; performance</small></header>
 <main id="app"></main>
 <nav>
  <button data-t="daily" class="on">Daily</button>
  <button data-t="women">Women</button>
  <button data-t="staff">Staff</button>
+ <button data-t="reg">Register</button>
  <button data-t="rep">Reports</button>
  <button data-t="data">Backup</button>
 </nav>
 <div id="modal" class="modal hide"><div id="mbody"></div></div>
 
 <script>
-const KEY='mnhc_bullo_v3';
-const IND=[['anc','ANC'],['edd','EDD'],['nvd','NVD'],['pnc','PNC'],['fp','FP']];
-let db={staff:[],women:[],visits:[],services:[],entries:[],attend:[],targets:{}};
-function norm(d){return{staff:d.staff||[],women:d.women||[],visits:d.visits||[],services:d.services||[],entries:d.entries||[],attend:d.attend||[],targets:d.targets||{}}}
+const KEY='mnhc_bullo_v3',CFG='mnhc_sync_cfg',META='mnhc_sync_meta';
+const IND=[['anc','ANC'],['edd','EDD']];
+const TYPES=['staff','women','visits','entries','attend'];
+let db={staff:[],women:[],visits:[],entries:[],attend:[],targets:{},del:[]};
+function norm(d){
+ const o={staff:d.staff||[],women:d.women||[],visits:d.visits||[],entries:d.entries||[],attend:d.attend||[],targets:d.targets||{},del:d.del||[]};
+ o.entries.forEach(e=>{e.id='e_'+e.sid+'_'+e.date});
+ o.attend.forEach(a=>{a.id='a_'+a.sid+'_'+a.date});
+ return o;
+}
 function load(){try{const s=localStorage.getItem(KEY);if(s)db=norm(JSON.parse(s))}catch(e){}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){alert('Could not save: storage full or blocked')}}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){alert('Could not save: storage full or blocked')}}
+function save(){persist();scheduleSync()}
 load();
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const $=s=>document.querySelector(s);
@@ -84,54 +103,76 @@ const wk=w=>Math.max(0,Math.floor(diff(today(),addDays(w.edd,-280))/7));
 const wOf=v=>db.women.find(x=>x.id===v.wid);
 const getE=(sid,d)=>db.entries.find(e=>e.sid===sid&&e.date===d);
 const getAtt=(sid,d)=>(db.attend.find(a=>a.sid===sid&&a.date===d)||{}).status||'';
-let tab='daily',dDate=today(),sel='',repMode='month',repDate=today(),repRole='',rSid='',rMon=today().slice(0,7);
+const monthLabel=f=>new Date(f+'T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+let showDel=false;
+let tab='daily',dDate=today(),sel='',repMode='month',repDate=today(),repRole='',rSid='',rMon=today().slice(0,7),rgMon=today().slice(0,7);
 
+// ---------- deletions (tombstones so deletes sync) ----------
+function tomb(t,id){db.del=db.del.filter(x=>!(x.t===t&&x.id===id));db.del.push({t,id,ts:Date.now()})}
+function untomb(t,id){db.del=db.del.filter(x=>!(x.t===t&&x.id===id))}
+function rm(t,pred){db[t]=db[t].filter(r=>{if(pred(r)){tomb(t,r.id);return false}return true})}
+
+// ---------- shell ----------
 function render(){
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===(tab==='rec'?'staff':tab)));
- $('#app').innerHTML=({daily:vDaily,women:vWomen,staff:vStaff,rep:vRep,data:vData,rec:vRec}[tab])();
+ $('#app').innerHTML=({daily:vDaily,women:vWomen,staff:vStaff,reg:vReg,rep:vRep,data:vData,rec:vRec}[tab])();
  window.scrollTo(0,0);
 }
 function modal(h){$('#mbody').innerHTML=h;$('#modal').classList.remove('hide')}
 function closeM(){$('#modal').classList.add('hide')}
 function staffFilter(){return `<select onchange="sel=this.value;render()"><option value="">All staff</option>${db.staff.map(l=>`<option value="${l.id}" ${sel===l.id?'selected':''}>${esc(l.name)} (${l.role})</option>`).join('')}</select>`}
 const tel=p=>p?`<a class="s" href="tel:${esc(p)}">Call</a>`:'';
+const wa=(p,txt)=>`<button class="w" onclick="waOpen(${esc(JSON.stringify(txt||''))},'${esc(p||'')}')">WhatsApp</button>`;
+
+// ---------- WhatsApp ----------
+function waNum(p){let d=String(p||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);else if(d.startsWith('0'))d='92'+d.slice(1);return d}
+function waOpen(text,phone){window.open('https://wa.me/'+(phone?waNum(phone):'')+'?text='+encodeURIComponent(text||''),'_blank')}
 
 // ---------- counts ----------
 function dayC(sid,d){
  const e=getE(sid,d)||{};
- const o={anc:e.anc||0,edd:e.edd||0,nvd:e.nvd||0,pnc:e.pnc||0,fp:e.fp||0};
+ const o={anc:e.anc||0,edd:e.edd||0};
  o.anc+=db.visits.filter(v=>v.date===d&&(wOf(v)||{}).lhw===sid).length;
- db.services.filter(x=>x.sid===sid&&x.date===d).forEach(x=>o[x.type.toLowerCase()]++);
  return o;
 }
 function stats(s,f,t){
- const o={anc:0,edd:0,nvd:0,pnc:0,fp:0};
+ const o={anc:0,edd:0};
  db.entries.filter(e=>e.sid===s.id&&inR(e.date,f,t)).forEach(e=>IND.forEach(([k])=>o[k]+=e[k]||0));
  o.anc+=db.visits.filter(v=>inR(v.date,f,t)&&(wOf(v)||{}).lhw===s.id).length;
- db.services.filter(x=>x.sid===s.id&&inR(x.date,f,t)).forEach(x=>o[x.type.toLowerCase()]++);
  o.edd+=db.women.filter(w=>w.lhw===s.id&&inR(w.edd,f,t)).length;
  const at=st=>db.attend.filter(a=>a.sid===s.id&&a.status===st&&inR(a.date,f,t)).length;
  o.P=at('P');o.A=at('A');o.L=at('L');
- o.total=o.anc+o.edd+o.nvd+o.pnc+o.fp;return o;
+ o.total=o.anc+o.edd;return o;
+}
+
+// ---------- attendance ----------
+function setAttOn(sid,d,st){
+ const a=db.attend.find(x=>x.sid===sid&&x.date===d);
+ if(!st){if(a)rm('attend',x=>x===a)}
+ else if(a)a.status=st;
+ else{const id='a_'+sid+'_'+d;db.attend.push({id,sid,date:d,status:st});untomb('attend',id)}
+ save();
+}
+function setAtt(sid,st){setAttOn(sid,dDate,getAtt(sid,dDate)===st?'':st);render()}
+function allPresent(){db.staff.forEach(s=>{if(!getAtt(s.id,dDate))setAttOn(s.id,dDate,'P')});render()}
+function setNum(sid,k,v){
+ let e=getE(sid,dDate);
+ if(!e){const id='e_'+sid+'_'+dDate;e={id,sid,date:dDate,anc:0,edd:0};db.entries.push(e);untomb('entries',id)}
+ e[k]=Math.max(0,parseInt(v)||0);save();
 }
 
 // ---------- Daily ----------
-function setNum(sid,k,v){
- let e=getE(sid,dDate);
- if(!e){e={id:uid(),sid,date:dDate,anc:0,edd:0,nvd:0,pnc:0,fp:0};db.entries.push(e)}
- e[k]=Math.max(0,parseInt(v)||0);save();
+function backupBanner(){
+ if(!db.staff.length)return'';
+ const c=cfg();if(c.url&&c.key&&c.auto!==false)return'';
+ const l=lastBackup();if(l&&diff(today(),l)<7)return'';
+ return `<div class="card" style="border-color:var(--o);background:#fef3e2"><b>Back up your data</b><p class="m" style="margin:4px 0 8px">${l?'Last backup was '+diff(today(),l)+' days ago.':'You have not made a backup yet.'} If the app is uninstalled or the phone is lost, data is lost.</p><button class="p" onclick="tab='data';render()">Go to Backup</button></div>`;
 }
-function setAtt(sid,st){
- const a=db.attend.find(x=>x.sid===sid&&x.date===dDate);
- if(a){if(a.status===st)db.attend=db.attend.filter(x=>x!==a);else a.status=st}else db.attend.push({sid,date:dDate,status:st});
- save();render();
-}
-function allPresent(){db.staff.forEach(s=>{if(!getAtt(s.id,dDate))db.attend.push({sid:s.id,date:dDate,status:'P'})});save();render()}
 function vDaily(){
  if(!db.staff.length)return `<div class="card"><p>Add your LHWs and CHIs first.</p><button class="p" onclick="tab='staff';render()">Go to Staff</button></div>`;
  const card=s=>{const e=getE(s.id,dDate)||{};const st=getAtt(s.id,dDate);
-  const rc=dayC(s.id,dDate),qc=e;
-  const recd=[['ANC',rc.anc-(qc.anc||0)],['PNC',rc.pnc-(qc.pnc||0)],['FP',rc.fp-(qc.fp||0)],['NVD',rc.nvd-(qc.nvd||0)]].filter(x=>x[1]>0).map(x=>x.join(' ')+'').join(' · ');
+  const rc=dayC(s.id,dDate);
+  const recd=[['ANC',rc.anc-(e.anc||0)]].filter(x=>x[1]>0).map(x=>x.join(' ')).join(' · ');
   return `<div class="card"><div class="row"><b>${esc(s.name)}</b><span class="tag">${s.role}</span></div>
   <div class="row att" style="margin-top:8px">
   <button class="P ${st==='P'?'on':''}" onclick="setAtt('${s.id}','P')">Present</button>
@@ -140,11 +181,47 @@ function vDaily(){
   <div class="m" style="margin-top:8px">Quick counts (extra, not already entered as individual records):</div>
   <div class="g5" style="margin-top:4px">${IND.map(([k,n])=>`<div><span>${n}</span><input type="number" inputmode="numeric" min="0" value="${e[k]||''}" placeholder="0" onchange="setNum('${s.id}','${k}',this.value)"></div>`).join('')}</div>
   ${recd?`<div class="m" style="margin-top:6px">From individual records today: ${recd}</div>`:''}</div>`};
- return `<div class="card"><label style="margin-top:0">Date</label>
+ return backupBanner()+`<div class="card"><label style="margin-top:0">Date</label>
  <div class="row"><input type="date" value="${dDate}" onchange="dDate=this.value||today();render()">
  <button class="s" style="white-space:nowrap" onclick="allPresent()">All present</button></div>
- <p class="m" style="margin:8px 0 0">Mark attendance here. Visits entered under Women are counted automatically; use quick counts only for work you are not recording individually.</p></div>
+ <p class="m" style="margin:8px 0 0">Mark attendance here (or in the Register tab). Visits entered under Women are counted automatically; use quick counts only for work you are not recording individually.</p></div>
  ${['LHW','CHI'].map(r=>{const l=db.staff.filter(s=>s.role===r);return l.length?`<h2>${r}s</h2>`+l.map(card).join(''):''}).join('')}`;
+}
+
+// ---------- Attendance register ----------
+function monthRange(m){const y=+m.slice(0,4),mo=+m.slice(5,7);return[iso(new Date(y,mo-1,1)),iso(new Date(y,mo,0))]}
+function regTot(sid,f,t){const c=st=>db.attend.filter(a=>a.sid===sid&&a.status===st&&inR(a.date,f,t)).length;return `${c('P')}/${c('A')}/${c('L')}`}
+function shiftReg(n){const d=new Date(rgMon+'-01T00:00:00');d.setMonth(d.getMonth()+n);rgMon=iso(d).slice(0,7);render()}
+function regStaff(){return['LHW','CHI'].flatMap(r=>db.staff.filter(s=>s.role===r))}
+function vReg(){
+ if(!db.staff.length)return '<div class="card"><p>Add staff first.</p><button class="p" onclick="tab=\'staff\';render()">Go to Staff</button></div>';
+ const[f,t]=monthRange(rgMon);const n=+t.slice(8);
+ const hdr=[...Array(n)].map((_,i)=>{const wd=new Date(addDays(f,i)+'T00:00:00').getDay();return `<th class="${wd===0?'sun':''}">${i+1}<br><small>${'SMTWTFS'[wd]}</small></th>`}).join('');
+ const rows=regStaff().map(s=>{
+  const cells=[...Array(n)].map((_,i)=>{const d=addDays(f,i),st=getAtt(s.id,d);return `<td class="rc ${st}" onclick="cyc(this,'${s.id}','${d}')">${st}</td>`}).join('');
+  return `<tr><th class="nm">${esc(s.name)}<small>${s.role}</small></th>${cells}<td class="tot" id="rt_${s.id}">${regTot(s.id,f,t)}</td></tr>`}).join('');
+ return `<div class="card"><div class="row"><button class="s" onclick="shiftReg(-1)">‹</button><b>Attendance · ${monthLabel(f)}</b><button class="s" onclick="shiftReg(1)">›</button></div>
+ <p class="m" style="margin:8px 0 0">Tap a box to change: P (present) → A (absent) → L (leave) → empty. Last column = P/A/L totals.</p>
+ <div class="wrap"><button class="s" onclick="regCSV()">Export CSV</button><button class="w" onclick="regWA()">Send on WhatsApp</button></div></div>
+ <div class="regw"><table class="reg"><tr><th class="nm">Staff</th>${hdr}<th>P/A/L</th></tr>${rows}</table></div>`;
+}
+function cyc(td,sid,d){
+ const nx={'':'P',P:'A',A:'L',L:''}[getAtt(sid,d)];
+ setAttOn(sid,d,nx);
+ td.className='rc '+nx;td.textContent=nx;
+ const[f,t]=monthRange(d.slice(0,7));const e=document.getElementById('rt_'+sid);if(e)e.textContent=regTot(sid,f,t);
+}
+function regWA(){
+ const[f,t]=monthRange(rgMon);
+ let s=`*MNHC BULLO – Attendance ${monthLabel(f)}*\n(Present / Absent / Leave)\n`;
+ regStaff().forEach(x=>{s+=`\n${x.name} (${x.role}): ${regTot(x.id,f,t)}`});
+ waOpen(s);
+}
+function regCSV(){
+ const[f,t]=monthRange(rgMon);const n=+t.slice(8);
+ const rows=[['Role','Name',...[...Array(n)].map((_,i)=>i+1),'Present','Absent','Leave']];
+ regStaff().forEach(s=>{const r=[s.role,s.name];for(let i=0;i<n;i++)r.push(getAtt(s.id,addDays(f,i)));const [p,a,l]=regTot(s.id,f,t).split('/');rows.push([...r,p,a,l])});
+ dl(`attendance-${rgMon}.csv`,rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
 }
 
 // ---------- Women ----------
@@ -155,26 +232,25 @@ function nextDue(w){
 }
 function wCard(w){
  const d=diff(w.edd,today());const cnt=db.visits.filter(v=>v.wid===w.id).length;
+ const remind=`Assalam o Alaikum ${w.name}, this is MNHC BULLO. Your next antenatal check-up is due. Your expected delivery date is ${fmt(w.edd)}. Please contact your LHW ${sName(w.lhw)}.`;
  return `<div class="card"><div class="row"><b>${esc(w.name)}</b><span class="tag">${esc(sName(w.lhw))}</span></div>
  <div class="m">${w.age?esc(w.age)+' yrs · ':''}${w.phone?esc(w.phone)+' · ':''}${esc(w.village||'')}${w.gp?' · '+esc(w.gp):''}</div>
  <div class="m">${w.risk?'<span class="tag red">High risk</span> ':''}EDD <b>${fmt(w.edd)}</b> (${d>=0?d+' days left':Math.abs(d)+' days past'}) · ~${wk(w)} wks · ${cnt} ANC visits</div>
  <div class="wrap"><button class="p" onclick="visitForm('${w.id}')">+ ANC visit</button>
  <button class="s" onclick="womanForm('${w.id}')">Edit / EDD</button>
- <button class="s" onclick="deliver('${w.id}')">Delivered</button>${tel(w.phone)}</div></div>`;
+ <button class="s" onclick="deliver('${w.id}')">Delivered</button>${tel(w.phone)}${w.phone?wa(w.phone,remind):''}</div></div>`;
 }
 function deliver(id){const w=db.women.find(x=>x.id===id);const d=prompt('Delivery date (YYYY-MM-DD)',today());if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d)){w.delivered=d;save();render()}}
 function vWomen(){
  const act=db.women.filter(w=>!w.delivered&&(!sel||w.lhw===sel)).sort((a,b)=>a.edd.localeCompare(b.edd));
  const due=act.filter(w=>nextDue(w)<=today());
- const dl=db.women.filter(w=>w.delivered&&(!sel||w.lhw===sel));
- const ts=db.services.filter(v=>v.date===today()&&(!sel||v.sid===sel));
- return `<div class="card">${staffFilter()}<div class="grid" style="margin-top:8px"><button class="p" onclick="womanForm(null,'${sel}')">+ Pregnant woman</button><button class="p" onclick="svcForm()">+ PNC / FP / NVD</button></div>
+ const dl_=db.women.filter(w=>w.delivered&&(!sel||w.lhw===sel));
+ return `<div class="card">${staffFilter()}<div style="margin-top:8px"><button class="p" style="width:100%" onclick="womanForm(null,'${sel}')">+ Pregnant woman</button></div>
  <div class="m" style="margin-top:8px">${act.length} active pregnancies · ${due.length} ANC due or overdue</div></div>
  ${due.length?`<h2>ANC due / overdue</h2>`+due.map(wCard).join(''):''}
  <h2>All EDDs (nearest first)</h2>
  ${act.length?act.filter(w=>!due.includes(w)).map(wCard).join('')||'<p class="m">All shown above.</p>':'<p class="m">No active pregnancies.</p>'}
- ${ts.length?`<h2>PNC / FP / NVD today</h2>`+ts.map(v=>`<div class="card"><b>${v.type} · ${esc(v.name||'-')}</b> <span class="tag">${esc(sName(v.sid))}</span>${v.method?`<div class="m">Method: ${esc(v.method)}</div>`:''}${v.note?`<div class="m">${esc(v.note)}</div>`:''}<a href="#" class="lnk" onclick="delSvc('${v.id}');return false">remove</a></div>`).join(''):''}
- ${dl.length?`<h2>Delivered</h2>`+dl.map(w=>`<div class="card"><b>${esc(w.name)}</b> <span class="tag">${esc(sName(w.lhw))}</span><div class="m">EDD was ${fmt(w.edd)} · delivered ${fmt(w.delivered)}</div><button class="s" onclick="womanForm('${w.id}')">Edit</button></div>`).join(''):''}`;
+ ${dl_.length?`<button class="s" style="width:100%;margin:10px 0" onclick="showDel=!showDel;render()">${showDel?'Hide':'Show'} delivered (${dl_.length})</button>`+(showDel?dl_.map(w=>`<div class="card"><b>${esc(w.name)}</b> <span class="tag">${esc(sName(w.lhw))}</span><div class="m">EDD was ${fmt(w.edd)} · delivered ${fmt(w.delivered)}</div><button class="s" onclick="womanForm('${w.id}')">Edit</button></div>`).join(''):''):''}`;
 }
 function womanForm(id,pre){
  if(!db.staff.length){alert('Add an LHW or CHI first');tab='staff';return render()}
@@ -203,7 +279,7 @@ function saveWoman(id){
  if(id)Object.assign(db.women.find(x=>x.id===id),o);else db.women.push({id:uid(),created:today(),...o});
  save();closeM();render();
 }
-function delWoman(id){if(confirm('Delete this woman and her ANC visits?')){db.women=db.women.filter(x=>x.id!==id);db.visits=db.visits.filter(v=>v.wid!==id);save();closeM();render()}}
+function delWoman(id){if(confirm('Delete this woman and her ANC visits?')){rm('women',w=>w.id===id);rm('visits',v=>v.wid===id);save();closeM();render()}}
 function visitForm(wid){
  const w=db.women.find(x=>x.id===wid);
  const past=db.visits.filter(v=>v.wid===wid).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
@@ -220,32 +296,14 @@ function saveVisit(wid){
  db.visits.push({id:uid(),wid,date,bp:$('#v2').value.trim(),wt:$('#v3').value,hb:$('#v4').value,fh:$('#v5').value,note:$('#v6').value.trim()});
  save();closeM();render();
 }
-function delVisit(id,wid){if(confirm('Remove this visit?')){db.visits=db.visits.filter(v=>v.id!==id);save();visitForm(wid);render()}}
-function svcForm(){
- if(!db.staff.length){alert('Add an LHW or CHI first');tab='staff';return render()}
- modal(`<h2>Record service</h2>
- <label>Type</label><select id="s0" onchange="$('#fpbox').classList.toggle('hide',this.value!=='FP')"><option>PNC</option><option>FP</option><option value="NVD">NVD (normal vaginal delivery)</option></select>
- <label>LHW / CHI</label><select id="s1">${db.staff.map(l=>`<option value="${l.id}" ${l.id===sel?'selected':''}>${esc(l.name)} (${l.role})</option>`).join('')}</select>
- <label>Date</label><input id="s2" type="date" value="${today()}">
- <label>Woman / client name</label><input id="s3" list="wl"><datalist id="wl">${db.women.map(w=>`<option value="${esc(w.name)}">`).join('')}</datalist>
- <div id="fpbox" class="hide"><label>FP method</label><select id="s4"><option>Counselling</option><option>Injection</option><option>Pills</option><option>Condoms</option><option>IUCD</option><option>Implant</option><option>Other</option></select></div>
- <label>Notes</label><textarea id="s5" rows="2"></textarea>
- <div class="row" style="margin-top:14px"><button class="s" onclick="closeM()">Cancel</button><button class="p" onclick="saveSvc()">Save</button></div>`);
-}
-function saveSvc(){
- const type=$('#s0').value,date=$('#s2').value;if(!date)return alert('Date required');
- db.services.push({id:uid(),type,sid:$('#s1').value,date,name:$('#s3').value.trim(),method:type==='FP'?$('#s4').value:'',note:$('#s5').value.trim()});
- save();closeM();render();
-}
-function delSvc(id){if(confirm('Remove this record?')){db.services=db.services.filter(s=>s.id!==id);save();render()}}
-
+function delVisit(id,wid){if(confirm('Remove this visit?')){rm('visits',v=>v.id===id);save();visitForm(wid);render()}}
 // ---------- Staff + individual record ----------
 function vStaff(){
  return `<button class="p" style="width:100%;margin-bottom:10px" onclick="staffForm()">+ Add LHW / CHI</button>`+
  (db.staff.length?db.staff.map(l=>{const n=db.women.filter(w=>w.lhw===l.id&&!w.delivered).length;
  return `<div class="card"><div class="row"><b>${esc(l.name)} <span class="tag">${l.role}</span></b><span class="m">${esc(l.phone||'')}</span></div>
  <div class="m">${esc(l.area||'')}${l.area?' · ':''}${n} active pregnancies</div>
- <div class="wrap"><button class="p" onclick="openRec('${l.id}')">Record</button>${tel(l.phone)}<button class="s" onclick="staffForm('${l.id}')">Edit</button></div></div>`}).join(''):'<p class="m">No staff added yet.</p>');
+ <div class="wrap"><button class="p" onclick="openRec('${l.id}')">Record</button>${tel(l.phone)}${l.phone?wa(l.phone,''):''}<button class="s" onclick="staffForm('${l.id}')">Edit</button></div></div>`}).join(''):'<p class="m">No staff added yet.</p>');
 }
 function staffForm(id){
  const l=db.staff.find(x=>x.id===id)||{role:'LHW'};
@@ -267,16 +325,18 @@ function saveStaff(id){
 function delStaff(id){
  if(db.women.some(w=>w.lhw===id))return alert('Delete or reassign this person\'s women first.');
  if(confirm('Delete this person and their entries and attendance?')){
-  db.staff=db.staff.filter(x=>x.id!==id);db.entries=db.entries.filter(e=>e.sid!==id);db.attend=db.attend.filter(a=>a.sid!==id);db.services=db.services.filter(s=>s.sid!==id);
+  rm('staff',x=>x.id===id);rm('entries',e=>e.sid===id);rm('attend',a=>a.sid===id);
   save();closeM();render()}
 }
 function openRec(id){rSid=id;rMon=today().slice(0,7);tab='rec';render()}
 function shiftRec(n){const d=new Date(rMon+'-01T00:00:00');d.setMonth(d.getMonth()+n);rMon=iso(d).slice(0,7);render()}
-function monthRange(m){const y=+m.slice(0,4),mo=+m.slice(5,7);return[iso(new Date(y,mo-1,1)),iso(new Date(y,mo,0))]}
+function recWA(){
+ const s=db.staff.find(x=>x.id===rSid);const[f,t]=monthRange(rMon);const x=stats(s,f,t);
+ waOpen(`*MNHC BULLO – ${s.name} (${s.role})*\n${monthLabel(f)}\nANC ${x.anc} · EDD ${x.edd}\nAttendance: ${x.P} present, ${x.A} absent, ${x.L} leave`,s.phone);
+}
 function vRec(){
  const s=db.staff.find(x=>x.id===rSid);if(!s){tab='staff';return vStaff()}
  const[f,t]=monthRange(rMon);const x=stats(s,f,t);
- const label=new Date(f+'T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
  const stTag=st=>st==='P'?'<span class="tag">Present</span>':st==='A'?'<span class="tag red">Absent</span>':st==='L'?'<span class="tag or">Leave</span>':'';
  const days=[];
  for(let d=t;d>=f;d=addDays(d,-1)){const st=getAtt(s.id,d),c=dayC(s.id,d);if(st||IND.some(([k])=>c[k]))days.push({d,st,c})}
@@ -285,8 +345,9 @@ function vRec(){
  const ws=db.women.filter(w=>w.lhw===s.id&&!w.delivered).sort((a,b)=>a.edd.localeCompare(b.edd));
  return `<div class="card"><div class="row"><button class="s" onclick="tab='staff';render()">‹ Back</button><button class="s" onclick="repCSV('${s.id}')">Export CSV</button></div>
  <h2 style="margin:10px 0 2px">${esc(s.name)} <span class="tag">${s.role}</span></h2>
- <div class="m">${esc(s.phone||'')}${s.phone&&s.area?' · ':''}${esc(s.area||'')}</div></div>
- <div class="card"><div class="row"><button class="s" onclick="shiftRec(-1)">‹</button><b>${label}</b><button class="s" onclick="shiftRec(1)">›</button></div>
+ <div class="m">${esc(s.phone||'')}${s.phone&&s.area?' · ':''}${esc(s.area||'')}</div>
+ <div class="wrap"><button class="w" onclick="recWA()">Send summary on WhatsApp</button></div></div>
+ <div class="card"><div class="row"><button class="s" onclick="shiftRec(-1)">‹</button><b>${monthLabel(f)}</b><button class="s" onclick="shiftRec(1)">›</button></div>
  <div class="g5">${IND.map(([k,n])=>`<div><span>${n}</span><div class="big">${x[k]}</div></div>`).join('')}</div>
  <div class="m" style="margin-top:8px">Attendance: <span class="tag">${x.P} present</span> <span class="tag red">${x.A} absent</span> <span class="tag or">${x.L} leave</span></div></div>
  <h2>Women under ${esc(s.name)} (${ws.length})</h2>
@@ -296,7 +357,7 @@ function vRec(){
  <div class="m">${IND.map(([k,n])=>`${n} ${c[k]}`).join(' · ')}</div>
  <button class="s" style="margin-top:6px" onclick="dDate='${d}';tab='daily';render()">Edit this day</button></div>`).join(''):'<p class="m">No entries this month.</p>'}
  <h2>Last 6 months</h2>
- <div class="card">${hist.map(({m,x})=>`<div class="row" style="padding:4px 0;border-bottom:1px solid var(--b)"><b>${new Date(m+'-01T00:00:00').toLocaleDateString('en-GB',{month:'short',year:'2-digit'})}</b><span class="m">ANC ${x.anc} · EDD ${x.edd} · NVD ${x.nvd} · PNC ${x.pnc} · FP ${x.fp} · ${x.P}P/${x.A}A/${x.L}L</span></div>`).join('')}</div>`;
+ <div class="card">${hist.map(({m,x})=>`<div class="row" style="padding:4px 0;border-bottom:1px solid var(--b)"><b>${new Date(m+'-01T00:00:00').toLocaleDateString('en-GB',{month:'short',year:'2-digit'})}</b><span class="m">ANC ${x.anc} · EDD ${x.edd} · ${x.P}P/${x.A}A/${x.L}L</span></div>`).join('')}</div>`;
 }
 
 // ---------- Reports ----------
@@ -307,24 +368,33 @@ function shiftP(n){
  else{const d=new Date(repDate+'T00:00:00');d.setDate(1);d.setMonth(d.getMonth()+n);repDate=iso(d)}
  render();
 }
-function vRep(){
+function repData(){
  const[f,t]=range();
  const list=db.staff.filter(s=>!repRole||s.role===repRole).map(s=>({s,x:stats(s,f,t)})).sort((a,b)=>b.x.total-a.x.total);
- const label=repMode==='week'?`${fmt(f)} – ${fmt(t)}`:new Date(f+'T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
- const T={anc:0,edd:0,nvd:0,pnc:0,fp:0,P:0,A:0,L:0};list.forEach(({x})=>{for(const k in T)T[k]+=x[k]});
- const tg=db.targets;
+ const label=repMode==='week'?`${fmt(f)} – ${fmt(t)}`:monthLabel(f);
+ const T={anc:0,edd:0,P:0,A:0,L:0};list.forEach(({x})=>{for(const k in T)T[k]+=x[k]});
+ return{f,t,list,label,T};
+}
+function repWA(){
+ const{list,label,T}=repData();
+ let m=`*MNHC BULLO – ${repMode==='week'?'Weekly':'Monthly'} performance*\n${label}\n\nTotal: ANC ${T.anc} · EDD ${T.edd}\n`;
+ list.forEach(({s,x},i)=>{m+=`\n${i+1}. ${s.name} (${s.role}) – ANC ${x.anc}, EDD ${x.edd}; Att ${x.P}P/${x.A}A/${x.L}L`});
+ waOpen(m);
+}
+function vRep(){
+ const{list,label,T}=repData();const tg=db.targets;
  return `<div class="seg"><button class="${repMode==='week'?'on':''}" onclick="repMode='week';render()">Weekly</button><button class="${repMode==='month'?'on':''}" onclick="repMode='month';render()">Monthly</button></div>
  <div class="card"><div class="row"><button class="s" onclick="shiftP(-1)">‹</button><b>${label}</b><button class="s" onclick="shiftP(1)">›</button></div>
  <div class="row" style="margin-top:8px"><select onchange="repRole=this.value;render()"><option value="">LHW + CHI</option><option ${repRole==='LHW'?'selected':''}>LHW</option><option ${repRole==='CHI'?'selected':''}>CHI</option></select>
  <button class="s" style="white-space:nowrap" onclick="repCSV()">Export CSV</button></div>
- <button class="s" style="margin-top:8px;width:100%" onclick="targetForm()">Set monthly targets</button></div>
+ <div class="wrap"><button class="w" onclick="repWA()">Send on WhatsApp</button><button class="s" onclick="targetForm()">Set monthly targets</button></div></div>
  <div class="card"><b>Total · ${list.length} staff</b><div class="g5">${IND.map(([k,n])=>`<div><span>${n}</span><div class="big">${T[k]}</div></div>`).join('')}</div>
  <div class="m" style="margin-top:8px">Attendance: <span class="tag">${T.P} present</span> <span class="tag red">${T.A} absent</span> <span class="tag or">${T.L} leave</span></div></div>
  ${list.length?list.map(({s,x},i)=>`<div class="card"><div class="row"><b>${i+1}. ${esc(s.name)} <span class="tag">${s.role}</span></b><span class="big">${x.total}</span></div>
  <div class="g5">${IND.map(([k,n])=>{const g=tg[k]>0&&repMode==='month'?Math.round(x[k]/tg[k]*100):null;return `<div><span>${n}</span><b>${x[k]}</b>${g!==null?`<div class="bar"><i style="width:${Math.min(100,g)}%"></i></div><span>${g}%</span>`:''}</div>`}).join('')}</div>
  <div class="m" style="margin-top:8px">Attendance: <span class="tag">${x.P} present</span> <span class="tag red">${x.A} absent</span> <span class="tag or">${x.L} leave</span></div>
  <button class="s" style="margin-top:8px" onclick="openRec('${s.id}')">Individual record</button></div>`).join(''):'<p class="m">No staff yet.</p>'}
- <p class="m">ANC/PNC/FP/NVD = individual records + quick counts. EDD = women with EDD in the period + quick counts. Ranked by total.</p>`;
+ <p class="m">ANC = individual ANC visit records + quick counts. EDD = women with EDD in the period + quick counts. Ranked by total.</p>`;
 }
 function targetForm(){
  modal(`<h2>Monthly target per person</h2><p class="m">Leave blank for no target. Monthly reports then show % achieved.</p>
@@ -336,50 +406,153 @@ const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';
 function repCSV(sid){
  if(sid){
   const s=db.staff.find(x=>x.id===sid);
-  const dates=[...new Set([...db.entries.filter(e=>e.sid===sid).map(e=>e.date),...db.attend.filter(a=>a.sid===sid).map(a=>a.date),...db.services.filter(x=>x.sid===sid).map(x=>x.date),...db.visits.filter(v=>(wOf(v)||{}).lhw===sid).map(v=>v.date)])].sort();
-  const rows=[['Name','Role','Date','Attendance','ANC','EDD','NVD','PNC','FP']];
-  dates.forEach(d=>{const c=dayC(sid,d),st=getAtt(sid,d);rows.push([s.name,s.role,d,st==='P'?'Present':st==='A'?'Absent':st==='L'?'Leave':'',c.anc,c.edd,c.nvd,c.pnc,c.fp])});
+  const dates=[...new Set([...db.entries.filter(e=>e.sid===sid).map(e=>e.date),...db.attend.filter(a=>a.sid===sid).map(a=>a.date),...db.visits.filter(v=>(wOf(v)||{}).lhw===sid).map(v=>v.date)])].sort();
+  const rows=[['Name','Role','Date','Attendance','ANC','EDD']];
+  dates.forEach(d=>{const c=dayC(sid,d),st=getAtt(sid,d);rows.push([s.name,s.role,d,st==='P'?'Present':st==='A'?'Absent':st==='L'?'Leave':'',c.anc,c.edd])});
   return dl(`record-${s.name.replace(/\W+/g,'_')}.csv`,rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
  }
  const[f,t]=range();
- const rows=[['Role','Name','From','To','ANC','EDD','NVD','PNC','FP','Total','Present','Absent','Leave']];
- db.staff.filter(s=>!repRole||s.role===repRole).forEach(s=>{const x=stats(s,f,t);rows.push([s.role,s.name,f,t,x.anc,x.edd,x.nvd,x.pnc,x.fp,x.total,x.P,x.A,x.L])});
+ const rows=[['Role','Name','From','To','ANC','EDD','Total','Present','Absent','Leave']];
+ db.staff.filter(s=>!repRole||s.role===repRole).forEach(s=>{const x=stats(s,f,t);rows.push([s.role,s.name,f,t,x.anc,x.edd,x.total,x.P,x.A,x.L])});
  dl(`performance-${repMode}-${f}.csv`,rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
 }
 
 // ---------- Backup ----------
+function markBackup(){try{localStorage.setItem('mnhc_last_backup',today())}catch(e){}}
+function lastBackup(){try{return localStorage.getItem('mnhc_last_backup')||''}catch(e){return''}}
 function vData(){
- return `<div class="card"><b>Backup</b><p class="m">Data is saved only on this phone. Back up regularly and keep a copy safe (WhatsApp it to yourself, or save to Drive).</p>
+ const c=cfg();
+ return `<div class="card"><b>Online sync (Google Sheet)</b>
+ <p class="m">Everyone who enters the same link and key shares the same data. You can also see it as readable tables in your Google Sheet online.</p>
+ <label>Sync link</label><input id="sy1" value="${esc(c.url)}" placeholder="https://script.google.com/macros/s/.../exec">
+ <label>Access key</label><input id="sy2" value="${esc(c.key)}" placeholder="the secret word you chose">
+ <label><input type="checkbox" id="sy3" style="width:auto" ${c.auto!==false?'checked':''}> Sync automatically when online</label>
+ <div class="wrap"><button class="p" onclick="saveSync()">Save &amp; sync now</button><button class="w" onclick="shareSetup()">Send setup to staff on WhatsApp</button></div>
+ <p class="m" id="syncst" style="margin-bottom:0">${esc(syncMsg||'Not synced yet')}</p></div>
+ <div class="card"><b>Backup</b><p class="m">Data is also saved on this phone. Keep a backup copy safe.</p>
  <button class="p" onclick="exportJSON()">Export backup file</button>
+ <button class="w" style="margin-top:8px" onclick="waBackup()">Copy backup &amp; open WhatsApp</button>
  <button class="s" style="margin-top:8px" onclick="copyBackup()">Copy backup as text</button>
  <button class="s" style="margin-top:8px" onclick="eddCSV()">Export women / EDD list (.csv)</button>
- <label>Restore from backup file</label><input type="file" onchange="importFile(this)">
+ <p class="m" style="margin-bottom:0">Last backup: ${lastBackup()?fmt(lastBackup()):'never'}</p></div>
+ <div class="card"><b>Merge data from another phone</b><p class="m">Adds the other person's records to this phone. Nothing here is erased or duplicated.</p>
+ <label>Backup file from the other phone</label><input type="file" onchange="importFile(this,'merge')">
+ <label>Or paste their backup text</label><textarea id="pastem" rows="3"></textarea>
+ <button class="p" style="margin-top:8px" onclick="mergeText($('#pastem').value)">Merge</button></div>
+ <div class="card"><b>Restore (replaces everything)</b><p class="m">Use only on a new or reset phone, or to go back to an old backup. This erases the data currently on this phone.</p>
+ <label>Backup file</label><input type="file" onchange="importFile(this)">
  <label>Or paste backup text</label><textarea id="paste" rows="3"></textarea>
  <button class="s" style="margin-top:8px" onclick="importText($('#paste').value)">Restore from text</button></div>
- <div class="card"><b>Reset</b><p class="m">Deletes everything on this phone.</p><button class="d" onclick="if(confirm('Delete ALL data?')){db=norm({});save();render()}">Delete all data</button></div>`;
+ <div class="card"><b>Reset</b><p class="m">Deletes everything on this phone.</p><button class="d" onclick="if(confirm('Delete ALL data on this phone?')){db=norm({});persist();try{localStorage.removeItem(META)}catch(e){}render()}">Delete all data</button></div>`;
 }
 function dl(name,text,type){
  try{const file=new File([text],name,{type});
   if(navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],title:name}).catch(()=>{});return}}catch(e){}
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();
 }
-function exportJSON(){dl('mnhc-backup-'+today()+'.json',JSON.stringify(db),'application/json')}
-function copyBackup(){
- const s=JSON.stringify(db);
- if(navigator.clipboard)navigator.clipboard.writeText(s).then(()=>alert('Copied. Paste it into WhatsApp/Notes to keep it.'),()=>alert('Copy failed'));
- else{const t=document.createElement('textarea');t.value=s;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();alert('Copied')}
+function exportJSON(){markBackup();dl('mnhc-backup-'+today()+'.json',JSON.stringify(db),'application/json')}
+function clip(s,ok){
+ if(navigator.clipboard)navigator.clipboard.writeText(s).then(ok,()=>alert('Copy failed'));
+ else{const t=document.createElement('textarea');t.value=s;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();ok()}
+}
+function copyBackup(){markBackup();clip(JSON.stringify(db),()=>alert('Copied. Paste it into Notes or a chat to keep it.'))}
+function waBackup(){
+ const s=JSON.stringify(db);markBackup();
+ if(s.length>60000&&!confirm('Your backup is large and WhatsApp may cut it. Online sync is safer. Continue anyway?'))return;
+ clip(s,()=>{alert('Backup copied. WhatsApp will open. Choose a chat (for example message yourself), paste, and send.');waOpen('MNHC BULLO backup – paste the copied backup below this line')});
 }
 function eddCSV(){
  const rows=[['Staff','Role','Woman','Age','Phone','Village','LMP','EDD','Weeks','ANC visits','High risk','Delivered']];
  db.women.slice().sort((a,b)=>sName(a.lhw).localeCompare(sName(b.lhw))||a.edd.localeCompare(b.edd)).forEach(w=>rows.push([sName(w.lhw),(db.staff.find(s=>s.id===w.lhw)||{}).role,w.name,w.age,w.phone,w.village,w.lmp,w.edd,wk(w),db.visits.filter(v=>v.wid===w.id).length,w.risk?'Y':'',w.delivered]));
  dl('women-edd-'+today()+'.csv',rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
 }
-function importText(txt){try{const d=JSON.parse(txt);if(!d.staff)throw 0;if(confirm('Replace current data with this backup?')){db=norm(d);save();render();alert('Restored')}}catch(e){alert('Invalid backup')}}
-function importFile(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>importText(r.result);r.readAsText(f)}
+function importText(txt){
+ try{const d=JSON.parse(txt);if(!d.staff)throw 0;if(confirm('Replace current data with this backup?')){db=norm(d);persist();try{localStorage.removeItem(META)}catch(e){}render();alert('Restored')}}catch(e){alert('Invalid backup')}
+}
+function importFile(inp,mode){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>mode==='merge'?mergeText(r.result):importText(r.result);r.readAsText(f)}
+function mergeText(txt){
+ let raw;try{raw=JSON.parse(txt);if(!raw.staff)throw 0}catch(e){return alert('Invalid backup')}
+ if(!confirm('Merge this backup into the data on this phone?'))return;
+ const d=norm(raw),add={staff:0,women:0,visits:0,entries:0,attend:0},map={};
+ d.staff.forEach(s=>{
+  const ex=db.staff.find(x=>x.id===s.id)||db.staff.find(x=>x.role===s.role&&String(x.name).trim().toLowerCase()===String(s.name).trim().toLowerCase());
+  if(ex)map[s.id]=ex.id;else{db.staff.push(s);map[s.id]=s.id;add.staff++}
+ });
+ const mp=id=>map[id]||id;
+ d.women.forEach(w=>{w.lhw=mp(w.lhw);const ex=db.women.find(x=>x.id===w.id);
+  if(!ex){db.women.push(w);add.women++}else if((w.updated||'')>(ex.updated||''))Object.assign(ex,w)});
+ d.visits.forEach(v=>{if(!db.visits.some(x=>x.id===v.id)){db.visits.push(v);add.visits++}});
+ d.entries.forEach(e=>{e.sid=mp(e.sid);e.id='e_'+e.sid+'_'+e.date;const ex=getE(e.sid,e.date);
+  if(!ex){db.entries.push(e);add.entries++}else IND.forEach(([k])=>{if(!ex[k]&&e[k])ex[k]=e[k]})});
+ d.attend.forEach(a=>{a.sid=mp(a.sid);a.id='a_'+a.sid+'_'+a.date;if(!db.attend.some(x=>x.sid===a.sid&&x.date===a.date)){db.attend.push(a);add.attend++}});
+ for(const k in d.targets)if(!db.targets[k]&&d.targets[k])db.targets[k]=d.targets[k];
+ save();render();
+ alert(`Merged: ${add.women} women, ${add.visits} ANC visits, ${add.entries} daily counts, ${add.attend} attendance marks, ${add.staff} staff added.`);
+}
+
+// ---------- Online sync (Google Sheet via Apps Script) ----------
+function cfg(){try{return JSON.parse(localStorage.getItem(CFG))||{}}catch(e){return{}}}
+function setCfg(o){try{localStorage.setItem(CFG,JSON.stringify(o))}catch(e){}}
+function metaLoad(){try{return Object.assign({h:{},pushed:0,pulled:0},JSON.parse(localStorage.getItem(META)||'{}'))}catch(e){return{h:{},pushed:0,pulled:0}}}
+function metaSave(m){try{localStorage.setItem(META,JSON.stringify(m))}catch(e){}}
+const hs=r=>{const c=Object.assign({},r);delete c.ts;return JSON.stringify(c)};
+let syncing=false,syncT=null,syncMsg='';
+function setSync(m){syncMsg=m;const e=document.getElementById('syncst');if(e)e.textContent=m;$('#sub').textContent=cfg().url?'Online sync · '+m:'Field staff records & performance'}
+const hhmm=()=>new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+function canRender(){const a=document.activeElement;return $('#modal').classList.contains('hide')&&!(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))&&tab!=='reg'}
+function scheduleSync(){const c=cfg();if(!c.url||!c.key||c.auto===false)return;clearTimeout(syncT);syncT=setTimeout(()=>syncNow(false),4000)}
+function saveSync(){
+ const url=$('#sy1').value.trim(),key=$('#sy2').value.trim();
+ if(!url||!key)return alert('Enter both the sync link and the access key');
+ if(!/^https:\/\/script\.google\.com\//.test(url))return alert('The sync link should start with https://script.google.com/');
+ setCfg({url,key,auto:$('#sy3').checked});syncNow(true);
+}
+function shareSetup(){
+ const c=cfg();if(!c.url||!c.key)return alert('Save the sync link and key first');
+ waOpen(`MNHC BULLO app – sync setup\nOpen the app > Backup tab > Online sync, then enter:\n\nLink: ${c.url}\nKey: ${c.key}`);
+}
+async function syncNow(manual){
+ const c=cfg();
+ if(!c.url||!c.key){if(manual)alert('Enter the sync link and key first');return}
+ if(syncing)return;
+ syncing=true;setSync('Syncing…');
+ try{
+  const m=metaLoad(),now=Date.now(),push=[];
+  TYPES.forEach(t=>db[t].forEach(r=>{
+   const h=hs(r),k=t+':'+r.id;
+   if(m.h[k]!==h){r.ts=now;m.h[k]=h}
+   if((r.ts||0)>=m.pushed)push.push({t,id:r.id,ts:r.ts,d:r});
+  }));
+  const del=db.del.filter(x=>x.ts>=m.pushed);
+  const res=await fetch(c.url,{method:'POST',body:JSON.stringify({key:c.key,since:m.pulled,push,del})});
+  const j=await res.json();
+  if(!j.ok)throw new Error(j.err||'Server refused');
+  let ch=0;
+  (j.recs||[]).forEach(x=>{
+   const arr=db[x.t];if(!arr)return;
+   const i=arr.findIndex(r=>r.id===x.id);
+   if(i<0){if(db.del.some(z=>z.t===x.t&&z.id===x.id&&z.ts>=x.ts))return;arr.push(x.d);ch++}
+   else if((x.ts||0)>(arr[i].ts||0)){arr[i]=x.d;ch++}
+   else return;
+   m.h[x.t+':'+x.id]=hs(x.d);
+  });
+  (j.del||[]).forEach(x=>{const arr=db[x.t];if(!arr)return;const i=arr.findIndex(r=>r.id===x.id);if(i>=0&&(arr[i].ts||0)<=x.ts){arr.splice(i,1);ch++}});
+  m.pushed=now;m.pulled=j.now;metaSave(m);
+  db.del=db.del.filter(x=>x.ts>now-30*864e5);
+  persist();
+  setSync('Synced '+hhmm());
+  if(ch&&canRender())render();
+ }catch(e){setSync('Not synced ('+(e.message||'offline')+')')}
+ finally{syncing=false}
+}
+setInterval(()=>{const c=cfg();if(c.url&&c.key&&c.auto!==false&&!document.hidden)syncNow(false)},60000);
+window.addEventListener('online',()=>syncNow(false));
+setTimeout(()=>{const c=cfg();if(c.url&&c.key&&c.auto!==false)syncNow(false)},1500);
 
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeM()});
 render();
+if(cfg().url)setSync('ready');
 </script>
 </body>
 </html>
