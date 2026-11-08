@@ -230,9 +230,13 @@ function nextDue(w){
  if(!vs.length)return today();
  const k=wk(w);return addDays(vs[vs.length-1],k>=36?7:k>=28?14:28);
 }
+// Urdu reminder sent 7 days (or less) before EDD
+function urduEddMsg(w){
+ return `السلام علیکم محترمہ ${w.name}،\n\nآپ کی متوقع تاریخِ ڈیلیوری ${fmt(w.edd)} ہے، یعنی تقریباً ایک ہفتہ باقی ہے۔\n\nماں اور بچے کی صحت کے لیے آپ سے گزارش ہے کہ چیک اپ اور ڈیلیوری کے لیے MNHC BULLO تشریف لائیں۔ یہاں تربیت یافتہ اور تجربہ کار عملہ محفوظ اور باعزت زچگی کے لیے آپ کی خدمت میں موجود ہے۔\n\nدرد شروع ہونے، پانی کی تھیلی پھٹنے، خون آنے یا بچے کی حرکت کم محسوس ہونے کی صورت میں فوراً ہسپتال پہنچیں۔\n\nاللہ تعالیٰ آپ کو اور آپ کے بچے کو صحت و سلامتی عطا فرمائے۔\n\nشکریہ\nMNHC BULLO`;
+}
 function wCard(w){
  const d=diff(w.edd,today());const cnt=db.visits.filter(v=>v.wid===w.id).length;
- const remind=`Assalam o Alaikum ${w.name}, this is MNHC BULLO. Your next antenatal check-up is due. Your expected delivery date is ${fmt(w.edd)}. Please contact your LHW ${sName(w.lhw)}.`;
+ const remind=(d>=0&&d<=7)?urduEddMsg(w):`Assalam o Alaikum ${w.name}, this is MNHC BULLO. Your next antenatal check-up is due. Your expected delivery date is ${fmt(w.edd)}. Please contact your LHW ${sName(w.lhw)}.`;
  return `<div class="card"><div class="row"><b>${esc(w.name)}</b><span class="tag">${esc(sName(w.lhw))}</span></div>
  <div class="m">${w.age?esc(w.age)+' yrs · ':''}${w.phone?esc(w.phone)+' · ':''}${esc(w.village||'')}${w.gp?' · '+esc(w.gp):''}</div>
  <div class="m">${w.risk?'<span class="tag red">High risk</span> ':''}EDD <b>${fmt(w.edd)}</b> (${d>=0?d+' days left':Math.abs(d)+' days past'}) · ~${wk(w)} wks · ${cnt} ANC visits</div>
@@ -243,13 +247,15 @@ function wCard(w){
 function deliver(id){const w=db.women.find(x=>x.id===id);const d=prompt('Delivery date (YYYY-MM-DD)',today());if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d)){w.delivered=d;save();render()}}
 function vWomen(){
  const act=db.women.filter(w=>!w.delivered&&(!sel||w.lhw===sel)).sort((a,b)=>a.edd.localeCompare(b.edd));
- const due=act.filter(w=>nextDue(w)<=today());
+ const soon=act.filter(w=>{const d=diff(w.edd,today());return d>=0&&d<=7});
+ const due=act.filter(w=>nextDue(w)<=today()&&!soon.includes(w));
  const dl_=db.women.filter(w=>w.delivered&&(!sel||w.lhw===sel));
  return `<div class="card">${staffFilter()}<div style="margin-top:8px"><button class="p" style="width:100%" onclick="womanForm(null,'${sel}')">+ Pregnant woman</button></div>
  <div class="m" style="margin-top:8px">${act.length} active pregnancies · ${due.length} ANC due or overdue</div></div>
+ ${soon.length?`<h2>EDD in next 7 days (${soon.length})</h2><p class="m">Tap WhatsApp to send the Urdu delivery reminder.</p>`+soon.map(wCard).join(''):''}
  ${due.length?`<h2>ANC due / overdue</h2>`+due.map(wCard).join(''):''}
  <h2>All EDDs (nearest first)</h2>
- ${act.length?act.filter(w=>!due.includes(w)).map(wCard).join('')||'<p class="m">All shown above.</p>':'<p class="m">No active pregnancies.</p>'}
+ ${act.length?act.filter(w=>!due.includes(w)&&!soon.includes(w)).map(wCard).join('')||'<p class="m">All shown above.</p>':'<p class="m">No active pregnancies.</p>'}
  ${dl_.length?`<button class="s" style="width:100%;margin:10px 0" onclick="showDel=!showDel;render()">${showDel?'Hide':'Show'} delivered (${dl_.length})</button>`+(showDel?dl_.map(w=>`<div class="card"><b>${esc(w.name)}</b> <span class="tag">${esc(sName(w.lhw))}</span><div class="m">EDD was ${fmt(w.edd)} · delivered ${fmt(w.delivered)}</div><button class="s" onclick="womanForm('${w.id}')">Edit</button></div>`).join(''):''):''}`;
 }
 function womanForm(id,pre){
